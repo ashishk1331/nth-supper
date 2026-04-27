@@ -1,6 +1,6 @@
 # Sample session — Friday team lunch
 
-A worked example showing the agent (`@supper`) running a complete group order from trigger to delivery. Ten visible chat exchanges spanning ~35 minutes. Each block has a brief *internal* note explaining what the agent should be doing under the hood.
+A worked example showing the agent (`@supper`) running a complete group order from trigger to delivery under the three-phase model. Each block has a brief *internal* note explaining what the agent is doing under the hood.
 
 ## Setup
 
@@ -11,14 +11,14 @@ A worked example showing the agent (`@supper`) running a complete group order fr
 
 ---
 
-### 1. Trigger
+### 1. Trigger — PLANNING begins
 
 **[12:51] @alice:** *"@supper let's grab lunch, biryani vibes"*
 
 **[12:51] @supper:**
 > Started **#brave-pepper-flies**. @alice on the bill, that work? Going Hyderabadi for biryani — your usual is Paradise (you've ordered there 4 times). Try them again, or somewhere new?
 
-> *Internal: skill activated, state BROWSING. Pre-flight: generated session id `#brave-pepper-flies`, ran the leader-assignment ladder (no `default_leader` in group memory → fell back to triggering user @alice as provisional leader), loaded group memory. Memory turned up Paradise as a strong Friday pattern, so surfaced it directly. Named @alice in the opening message so she or anyone else can object within ~30 seconds. No Swiggy tool calls yet — waiting for the group to converge on leader + restaurant.*
+> *Internal: skill activated, phase PLANNING. Pre-flight: generated session id `#brave-pepper-flies`, ran the leader-assignment ladder (no `default_leader` → fell back to @alice), loaded group memory. Surfaced Paradise as a strong Friday pattern. Named @alice in the opening so reassignment can happen within ~30 seconds.*
 
 ---
 
@@ -26,7 +26,6 @@ A worked example showing the agent (`@supper`) running a complete group order fr
 
 **[12:52] @bob:** *"Paradise works."*
 **[12:52] @bob:** *"@carol you in?"*
-
 **[12:52] @carol:** 👍
 
 **[12:53] @supper:**
@@ -37,16 +36,14 @@ A worked example showing the agent (`@supper`) running a complete group order fr
 > • @bob — your last 3 here were paneer biryani, want that?
 > • @carol — veg or non-veg today?
 
-> *Internal: state BROWSING → COLLECTING. Called `swiggy_get_menu(paradise-id)` exactly once and cached the response. Pre-filled per-user suggestions from individual memory but did NOT auto-add anything — each member must say "yes" themselves. Acknowledged the high-min-order-value (₹500) up front so it doesn't ambush the group later.*
+> *Internal: still in PLANNING. Called `get_restaurant_menu(paradise-id)` exactly once and cached. Pre-filled per-user suggestions from individual memory but did NOT auto-add — each member must say "yes" themselves. Acknowledged the high-min-order-value (₹500) up front.*
 
 ---
 
 ### 3. Members add their items
 
 **[12:54] @alice:** *"yes usual + add a gulab jamun this time"*
-
 **[12:54] @bob:** *"paneer biryani, no raita"*
-
 **[12:55] @carol:** *"veg biryani and a coke"*
 
 **[12:55] @supper:**
@@ -55,15 +52,22 @@ A worked example showing the agent (`@supper`) running a complete group order fr
 > • @bob   — Paneer biryani ··························· ₹280
 > • @carol — Veg biryani, Coke ························· ₹260
 >
-> Subtotal **₹960** (min ₹500 ✓). All set, @alice?
+> Subtotal **₹960** (min ₹500 ✓)
 
-> *Internal: per-member carts populated. Total comfortably above min. Resolved each free-text item against the menu cache without needing `swiggy_get_dish_details` (no ambiguous variants in this case). Asked the party leader to close — closure is the leader's call, not unilateral.*
+> *Internal: per-member carts populated via `update_food_cart` for each addition. Resolved each free-text item against the menu cache without needing `search_menu` (no ambiguous variants). Agent does NOT prompt the leader to close — it watches for activity to die down.*
 
 ---
 
-### 4. Leader closes; voting starts
+### 4. Auto-close — agent closes PLANNING itself
 
-**[12:56] @alice:** *"yep close it"*
+**[12:56] @supper:** *(after ~60s of no further activity)*
+> Calling it — moving to vote.
+
+> *Internal: all three members have items, total ₹960 well above the ₹500 min, chat has been quiet ~60 seconds. PLANNING auto-closes. The party leader does NOT close this phase under the three-phase model.*
+
+---
+
+### 5. VOTING begins
 
 **[12:56] @supper:**
 > **#brave-pepper-flies** — final cart at Paradise:
@@ -75,107 +79,109 @@ A worked example showing the agent (`@supper`) running a complete group order fr
 > Subtotal: ₹960 · Delivery: ₹40 · **Total: ₹1000**
 > Delivery: @alice (party leader) — Office, 3rd floor
 >
-> React ✅ to confirm. Closing in 10 min.
+> React ✅ / 👍 to confirm, ❌ / 👎 to opt out. Or reply in chat. Closing in 10 min.
 
-> *Internal: state COLLECTING → VOTING. Posted the voting summary as a tracked message — its message id is now bound to the session for reaction routing. Ran `swiggy_check_availability` on the cart in the background; all items in stock, no halt needed.*
+> *Internal: phase PLANNING → VOTING. Posted the voting summary as a tracked message — its message id is now bound to the session for reaction routing. No MCP tool calls in this phase.*
 
 ---
 
-### 5. Reactions roll in (silent)
+### 6. Reactions roll in (silent)
 
 **[12:57] reactions on the voting summary:**
 - @alice: ✅
 - @bob: ✅
-- @carol: ✅
+- @carol: 👍
 
-> *Internal: each ✅ on the tracked message marks `members[X].confirmed = true`. **No chat reply per reaction** — that would be noise. The agent waits until all three are in (or until timeout).*
+> *Internal: each ✅/👍 marks `members[X].confirmed = true`. **No chat reply per reaction** — silent acknowledgement. All three responded in 60 seconds — well before the 10-minute timeout.*
 
 ---
 
-### 6. All confirmed → placing window
+### 7. ORDER — read back, leader confirms, place
 
 **[12:58] @supper:**
-> All set — placing in 10s. ❌ on this to abort.
+> **#brave-pepper-flies** — placing this:
+>
+> • @alice — Chicken biryani, raita, gulab jamun ····· ₹420
+> • @bob   — Paneer biryani ··························· ₹280
+> • @carol — Veg biryani, Coke ························· ₹260
+>
+> Subtotal: ₹960 · Delivery: ₹40 · **Total: ₹1000**
+> Delivery: Office, 3rd floor
+>
+> @alice — ✅ to place, ❌ to abort.
 
-> *Internal: all three members confirmed within 90 seconds — well before the 10-minute timeout. Posted the placing-in-10s message as a separate tracked message. Now waiting specifically for the party leader's ✅ on this new message (or anyone's ❌ to abort).*
-
----
-
-### 7. Leader confirms; order placed
-
-**[12:58] @alice:** ✅ (on the placing-in-10s message)
+**[12:58] @alice:** ✅
 
 **[12:59] @supper:**
 > Placing **#brave-pepper-flies** now…
 >
 > ✅ Placed at Paradise.
-> Swiggy order: SW-9981234
-> ETA: 31 minutes
+> Order: SW-9981234 · ETA: 31 min
+> Track: [link]
 
-> *Internal: state VOTING → PLACING → COMPLETE within ~30 seconds. Generated idempotency key `idem-9b3d-…` exactly once before calling `swiggy_place_order`. Call succeeded on the first attempt — no retry needed. Captured the Swiggy order id and ETA, then transitioned to COMPLETE with the success announcement.*
+> *Internal: phase VOTING → ORDER. Called `get_food_cart` to read back. Generated idempotency key `idem-9b3d-…` exactly once before `place_food_order`. Single attempt succeeded. Captured order id + ETA, called `track_food_order` for the tracking link.*
 
 ---
 
-### 8. Tracking on demand
+### 8. Owe list — automatic
+
+**[12:59] @supper:**
+> **Owe list — #brave-pepper-flies** (paid by @alice):
+> • @bob   — ₹293 (paneer biryani + delivery share)
+> • @carol — ₹273 (veg biryani, coke + delivery share)
+>
+> Total collected: ₹566 of ₹1000. (₹40 delivery split equally; @alice's own subtotal not owed.)
+
+> *Internal: owe list posted automatically right after the success message. Delivery split equally across all three paying members (₹13.33 each, rounded). @alice's own ₹420 subtotal is not owed back to herself.*
+
+---
+
+### 9. Tracking on demand
 
 **[1:18] @bob:** *"where's it at"*
 
 **[1:18] @supper:**
 > Out for delivery, ~10 min away.
 
-> *Internal: called `swiggy_track_order(SW-9981234)` because @bob asked. Did NOT broadcast every status update along the way — only on demand or at milestones.*
+> *Internal: called `track_food_order(SW-9981234)` because @bob asked. No fixed-schedule polling — only on demand or at milestones.*
 
 ---
 
-### 9. Delivery milestone
+### 10. Delivered
 
 **[1:25] @supper:**
 > Delivered for **#brave-pepper-flies**. ❤️ if you'd order from Paradise again.
 
-> *Internal: tracked the order through to "delivered" status. Posted the delivery confirmation. The ❤️ reaction prompt feeds restaurant-affinity memory — group reactions on this message will be picked up by the async memory extraction.*
-
----
-
-### 10. Reactions feed memory; session archived
-
-**[1:26] reactions on the delivered message:**
+**[1:26] reactions:**
 - @alice: ❤️
 - @bob: ❤️
 - @carol: 🔥
 
-> *Internal: state COMPLETE finalised. Session archived with status `complete`, full chat history, participant subtotals, swiggy order id. Memory extraction queued asynchronously. Expected updates from extraction:*
->
-> *- Reinforce `(group)-[:USUALLY_ORDERS_FROM]->(Paradise)` — bump reinforceCount (now their 5th Friday)*
-> *- Reinforce `(alice)-[:LIKES]->(chicken biryani)`, `(bob)-[:LIKES]->(paneer biryani)`, `(carol)-[:LIKES]->(veg biryani)`*
-> *- New: `(carol)-[:LIKES]->(coke)` (first time on order)*
-> *- Reinforce group fact `address.default = "Office, 3rd floor"`*
-> *- Strong positive sentiment on Paradise → `affinity.score` bumped*
+> *Internal: tracked the order through to "delivered". Session archived with `status: "complete"`, full chat, per-member subtotals, order id. Memory extraction queued asynchronously.*
 
 ---
 
 ## What this example demonstrates
 
-- **Full state progression:** BROWSING → COLLECTING → VOTING → PLACING → COMPLETE in under 35 minutes (most of which was waiting for delivery)
-- **Memory leverage at BROWSING:** offered the group's usual restaurant proactively, saving 2–3 turns of search
-- **Per-member memory at COLLECTING:** offered each user's past favourite as a *suggestion*, never auto-adding to a cart
-- **Reactions as confirmation channel:** every ✅ on the voting summary was silent on the agent's side — no chat reply per reaction
-- **Two distinct tracked messages:** the voting summary (for ✅/❌ on items) and the placing-in-10s message (for the leader's final placement ✅) — separate ids, separate intent
-- **Idempotency:** key generated exactly once before `swiggy_place_order`, ready to be reused on retry (not needed here, but the discipline matters)
-- **Tool economy:** `swiggy_get_menu` called *exactly once* in BROWSING; `swiggy_check_availability` once at the start of VOTING; `swiggy_track_order` only on user-initiated query and at the delivery milestone
-- **Memory extraction at COMPLETE:** the agent did NOT manually call memory-write tools — extraction runs async. The agent only mentioned observations conversationally to the group when relevant (it didn't here, because the pattern was already known).
-- **Concise messages:** every agent message fits on a screen. Cart summaries use bullets, not tables.
+- **Three-phase progression:** PLANNING → VOTING → ORDER, with the agent (not the leader) closing PLANNING automatically once activity went quiet.
+- **Single explicit leader confirmation in ORDER** — one prompt, one ✅, then placement. No separate "placing in 10s" message.
+- **Automatic owe list** posted right after the success message — the agent doesn't ask whether to share it.
+- **Memory leverage at PLANNING:** offered the group's usual restaurant proactively.
+- **Per-member memory in PLANNING:** offered each user's past favourite as a *suggestion*, never auto-adding to a cart.
+- **Reactions as confirmation channel:** every ✅/👍 was silent on the agent's side.
+- **Idempotency:** key generated exactly once before `place_food_order`.
+- **Tool economy:** `get_restaurant_menu` called *exactly once* in PLANNING; `track_food_order` only on user-initiated query and at the delivery milestone.
 
 ## What this example does NOT cover
 
-For each of these, see the corresponding state file:
+For each, see the relevant phase file:
 
-- **Member opts out mid-session** → `states/voting.md` and `states/collecting.md`
-- **Restaurant unavailability** → `states/browsing.md` and `states/voting.md`
-- **Cart total below minimum** → `states/collecting.md`
+- **Member opts out mid-session** → `states/voting.md` and `states/planning.md`
+- **Restaurant unavailability** → `states/planning.md` and `states/voting.md`
+- **Cart total below minimum** → `states/planning.md`
 - **Voting timeout with partial confirmations** → `states/voting.md`
-- **Network error during `swiggy_place_order`** → `states/placing.md`
-- **Item out of stock at availability check** → `states/voting.md` and `states/collecting.md`
-- **Reference to a previous session by `#human-id`** → `states/complete.md`
-- **Order cancelled by Swiggy after placement** → `states/complete.md`
-- **Group can't agree on a restaurant** → `states/browsing.md`
-- **Coupon code application** → `states/placing.md`
+- **Network error during `place_food_order`** → `states/order.md`
+- **Reference to a previous session by `#human-id`** → `states/order.md`
+- **Order cancelled by Swiggy after placement** → `states/order.md`
+- **Group can't agree on a restaurant** → `states/planning.md`
+- **Leader reassignment** → `states/planning.md` (PLANNING-only)

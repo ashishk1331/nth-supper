@@ -8,7 +8,8 @@
       "WebFetch(domain:api.github.com)",
       "Bash(awk '/^description:/,/^[a-z]+:/' skills/supper/SKILL.md)",
       "Bash(python *)",
-      "Bash(git mv *)"
+      "Bash(git mv *)",
+      "Bash(git rm *)"
     ]
   }
 }

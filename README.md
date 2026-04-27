@@ -10,8 +10,8 @@
 
 The skill teaches the agent:
 
-- A five-stage ordering state machine — BROWSING → COLLECTING → VOTING → PLACING → COMPLETE
-- Which Swiggy MCP tools to chain at each stage
+- A three-phase ordering flow — PLANNING → VOTING → ORDER
+- Which Swiggy MCP tools to chain at each phase
 - How to coordinate multiple humans building one shared cart
 - How chat reactions become confirmations and votes
 - How to assign a party leader for payment and delivery
@@ -21,10 +21,11 @@ The skill teaches the agent:
 
 ## Roles in a session
 
-Two roles exist in every order:
+Three roles exist in every order:
 
-- **Party leader** — one person, on the hook for the order. Pays, sets the delivery address, signals when the cart closes, and gives the final ✅ that triggers placement. Picked at session start (group memory's default leader if any, otherwise the user who triggered) and confirmed explicitly in the opening message. Reassignable at any time.
-- **Guests** — everyone else. Add their own items in plain English, react ✅ on the voting summary to confirm or ❌ to opt out, can volunteer to take over the leader role. Cannot close the cart, change the address, or trigger placement.
+- **Party leader** — one person, on the hook for the order. Pays, confirms the delivery address, and gives the **single explicit confirmation** in ORDER that triggers placement. Picked at session start (group memory's default leader if any, otherwise the user who triggered) and confirmed explicitly in the opening message. **Reassignable only during PLANNING.** Does NOT close PLANNING — the agent does.
+- **Guests** — everyone else. Add and remove their own items freely during PLANNING, confirm (✅/👍) or opt out (❌/👎) during VOTING by reaction or message. No action required in ORDER. Can join at any point during PLANNING.
+- **Agent** — owns the entire session flow: closes PLANNING automatically when activity goes quiet, nudges silent members once before excluding, manages voting and timeouts, recalculates totals on opt-outs, places the order after the leader's confirmation, and posts the owe list automatically after ORDER completes.
 
 ## Requirements
 
@@ -54,30 +55,28 @@ Once installed, the skill auto-activates when someone in a group chat says somet
 - "supper time"
 - "what should we eat"
 
-The agent will generate a session id (`#brave-pepper-flies`), open a cart, and run the rest of the flow. Members add items in plain English, react ✅ to confirm, and the party leader gives the final go-ahead before the order is placed.
+The agent will generate a session id (`#brave-pepper-flies`), open a cart, and run the rest of the flow. Members add items in plain English, react ✅ to confirm, and the party leader gives the single final go-ahead before the order is placed.
 
-You don't need to teach members new commands — natural conversation works. Reactions on the agent's tracked messages (the cart summary and the placing-confirmation message) are the primary confirmation channel.
+You don't need to teach members new commands — natural conversation works. Reactions on the agent's tracked messages (the voting summary and the leader's confirmation prompt in ORDER) are the primary confirmation channel.
 
 ## The ordering process
 
 ```
-BROWSING → COLLECTING → VOTING → PLACING → COMPLETE
-                                       ↘ CANCELLED
+PLANNING → VOTING → ORDER
+       ↘ CANCELLED
 ```
 
-| Stage | What happens | Trigger to advance |
+| Phase | What happens | Trigger to advance |
 |---|---|---|
-| **BROWSING** | On activation: agent generates a session id (`#brave-pepper-flies`), sets the triggering user as provisional party leader, and loads group memory. Then surfaces the group's usuals or runs `swiggy_search_restaurants`. Group converges on one restaurant; menu is fetched once and cached. | One restaurant is named and confirmed |
-| **COLLECTING** | Cart is open. Each member adds items in plain text. Agent posts a running summary, flags dietary conflicts silently, and asks quiet members once. | Party leader closes the cart |
-| **VOTING** | Agent posts a final summary; members react ✅ to confirm or ❌ to opt out. `swiggy_check_availability` runs in the background. Reactions are acknowledged silently. | All confirmed (or 10-minute timeout) |
-| **PLACING** | Idempotency key generated once. `swiggy_place_order` is called with the leader's final ✅; retries reuse the same key on network errors. | Swiggy returns an order id |
-| **COMPLETE** | Tracking link, on-demand status updates, archival, async memory extraction. A delivery confirmation message invites ❤️ reactions for restaurant-affinity memory. | (terminal) |
+| **PLANNING** | Agent generates a session id, picks a party leader, and loads group memory. Group converges on one restaurant; menu fetched once via `get_restaurant_menu` and cached. Each member adds items in plain text via `update_food_cart`; `search_menu` resolves ambiguous dish names. Agent flags dietary conflicts silently and nudges silent members once before marking them opted-out. | Agent auto-closes when all active members have items or are opted-out, total ≥ minimum, and chat goes quiet (~60s) |
+| **VOTING** | Agent posts a final per-person summary with subtotals and total. Members confirm (✅/👍) or opt out (❌/👎) by reaction or message. Opt-outs trigger total recalculation. Reactions are acknowledged silently. | All respond (or 10-minute timeout with ≥1 confirmation) |
+| **ORDER** | Agent reads back the final cart via `get_food_cart`, prompts the leader for one explicit ✅. Idempotency key generated once. `place_food_order` is called; retries reuse the same key. Order id + ETA shared via `track_food_order`. **Owe list posted automatically.** Tracking continues on demand and at delivery milestones. | (terminal) |
 
-Every stage has a detailed playbook in [`skills/supper/states/`](skills/supper/states/) — the agent reads the relevant file when it transitions in.
+Every phase has a detailed playbook in [`skills/supper/states/`](skills/supper/states/) — the agent reads the relevant file when it transitions in.
 
 ## A worked example
 
-A complete 10-message Friday team lunch is in [`skills/supper/examples/sample-session.md`](skills/supper/examples/sample-session.md), showing every state transition, every Swiggy tool call, and every reaction-driven confirmation.
+A complete Friday team lunch is in [`skills/supper/examples/sample-session.md`](skills/supper/examples/sample-session.md), showing every phase transition, every Swiggy tool call, the reaction-driven confirmations, and the auto-posted owe list.
 
 ## Skill structure
 
@@ -85,13 +84,11 @@ A complete 10-message Friday team lunch is in [`skills/supper/examples/sample-se
 skills/supper/
 ├── SKILL.md                       Overview, invariants, when to activate
 ├── states/
-│   ├── browsing.md                Activation pre-flight, search, restaurant lock, single menu fetch
-│   ├── collecting.md              Open cart, per-member tracking, dietary nudges
-│   ├── voting.md                  Summary message, reactions, timeout handling
-│   ├── placing.md                 Idempotent placement, retry rules, business errors
-│   └── complete.md                Tracking, archival, async memory extraction
+│   ├── planning.md                Activation pre-flight, restaurant pick, menu fetch, per-member item collection, auto-close
+│   ├── voting.md                  Summary message, reactions, opt-out recalculation, timeout handling
+│   └── order.md                   Read-back, leader confirmation, idempotent placement, tracking, owe list
 └── examples/
-    └── sample-session.md          End-to-end 10-message group order
+    └── sample-session.md          End-to-end group order
 ```
 
 The skill follows the [Agent Skills specification](https://agentskills.io/specification.md): YAML frontmatter with `name` and `description`, body under 500 lines, references one level deep, progressive disclosure so reference files load only when needed.
@@ -100,7 +97,7 @@ The skill follows the [Agent Skills specification](https://agentskills.io/specif
 
 This skill is text. To adapt it:
 
-- **Different food platform** — replace Swiggy MCP tool names in `SKILL.md` and each `states/*.md` with your platform's MCP tool names. The state machine, coordination rules, and edge-case logic carry over unchanged.
+- **Different food platform** — replace Swiggy MCP tool names in `SKILL.md` and each `states/*.md` with your platform's MCP tool names. The three-phase flow, coordination rules, and edge-case logic carry over unchanged.
 - **Different reaction conventions** — the ✅/❌/🔥/😐 mapping in `SKILL.md` is illustrative; adjust to your group's culture.
 - **Different timeouts** — the 10-minute voting window in `states/voting.md` is a default, not a hard rule.
 - **Different ID format** — `#human-id` slugs are convention; any human-readable scheme works.
