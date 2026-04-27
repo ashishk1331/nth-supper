@@ -1,12 +1,12 @@
-# nth-supper
+# supper-skills
 
-> A portable Agent Skill that lets any AI agent run a collaborative group food ordering session via Swiggy MCP — in Slack, Discord, Telegram, or any chat surface.
+> Agent Skills that let any AI agent run collaborative group food ordering sessions via Swiggy MCP — in Slack, Discord, Telegram, or any chat surface.
 
-![nth-supper banner](assets/banner.webp)
+![supper banner](assets/banner.webp)
 
 ## What this is
 
-`nth-supper` is a behaviour skill, not an application. Drop it into any agent that supports the [Agent Skills open standard](https://agentskills.io/specification.md) and has access to the Swiggy MCP servers, and the agent will know how to coordinate a group food order from "let's order food" to "delivered".
+`supper-skills` is a collection of behaviour skills, not an application. The first skill in this repo, `supper`, drops into any agent that supports the [Agent Skills open standard](https://agentskills.io/specification.md) and has access to the Swiggy MCP servers, and teaches the agent to coordinate a group food order from "let's order food" to "delivered".
 
 The skill teaches the agent:
 
@@ -39,10 +39,10 @@ Two roles exist in every order:
 The fastest way for any Skills-aware agent (Claude Code, Goose, OpenCode, Kilocode, etc.):
 
 ```bash
-npx skills add ashishk1331/nth-supper
+npx skills add ashishk1331/supper-skills/supper
 ```
 
-This pulls `skills/nth-supper/` from the GitHub repository and installs it into your agent's active skills directory.
+This pulls `skills/supper/` from the GitHub repository and installs it into your agent's active skills directory.
 
 ## How to use it
 
@@ -73,16 +73,16 @@ BROWSING → COLLECTING → VOTING → PLACING → COMPLETE
 | **PLACING** | Idempotency key generated once. `swiggy_place_order` is called with the leader's final ✅; retries reuse the same key on network errors. | Swiggy returns an order id |
 | **COMPLETE** | Tracking link, on-demand status updates, archival, async memory extraction. A delivery confirmation message invites ❤️ reactions for restaurant-affinity memory. | (terminal) |
 
-Every stage has a detailed playbook in [`skills/nth-supper/states/`](skills/nth-supper/states/) — the agent reads the relevant file when it transitions in.
+Every stage has a detailed playbook in [`skills/supper/states/`](skills/supper/states/) — the agent reads the relevant file when it transitions in.
 
 ## A worked example
 
-A complete 10-message Friday team lunch is in [`skills/nth-supper/examples/sample-session.md`](skills/nth-supper/examples/sample-session.md), showing every state transition, every Swiggy tool call, and every reaction-driven confirmation.
+A complete 10-message Friday team lunch is in [`skills/supper/examples/sample-session.md`](skills/supper/examples/sample-session.md), showing every state transition, every Swiggy tool call, and every reaction-driven confirmation.
 
 ## Skill structure
 
 ```
-skills/nth-supper/
+skills/supper/
 ├── SKILL.md                       Overview, invariants, when to activate
 ├── states/
 │   ├── browsing.md                Activation pre-flight, search, restaurant lock, single menu fetch
@@ -105,7 +105,7 @@ This skill is text. To adapt it:
 - **Different timeouts** — the 10-minute voting window in `states/voting.md` is a default, not a hard rule.
 - **Different ID format** — `#human-id` slugs are convention; any human-readable scheme works.
 
-After editing, validate with `skills-ref validate ./skills/nth-supper`.
+After editing, validate with `skills-ref validate ./skills/supper`.
 
 ## Architecture (for the curious)
 

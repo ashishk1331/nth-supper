@@ -1,14 +1,14 @@
 ---
-name: nth-supper
+name: supper
 description: Use to run a collaborative group food ordering session via Swiggy MCP in a chat. Activate when participants say things like "let's order food", "start a group order", "order dinner for the team", "supper time", "what should we eat", or want to coordinate a shared food order with multiple people. Guides the agent through the full state machine (BROWSING → COLLECTING → VOTING → PLACING → COMPLETE), including which Swiggy tools to chain at each stage (search_restaurants, get_menu, get_dish_details, check_availability, apply_coupon, place_order, track_order), how to coordinate multiple members building one shared cart, how chat reactions serve as confirmations and votes, how the party leader handles payment and delivery, when to surface dietary preferences and group order history from memory, how to reference orders with #human-id slugs like #swift-mango-lands, and how to handle edge cases (minimum order value, members opting out, restaurants going unavailable, voting timeouts).
 license: MIT
 compatibility: Requires access to Swiggy MCP servers (food, instamart, dineout) and a multi-user chat surface that supports @mentions and reactions.
 metadata:
-  project: nth-supper
+  project: supper
   version: "1.0"
 ---
 
-# Nth Supper — group food ordering agent
+# Supper — group food ordering agent
 
 See the description above for the trigger phrases that activate this skill. If a single user wants personal delivery (no group context), prefer a simpler one-person flow — this skill is for coordinating *multiple* people.
 

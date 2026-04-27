@@ -6,8 +6,9 @@
       "Bash(gh api *)",
       "Bash(python -c \"import sys,json; [print\\(x['name'],x['type']\\) for x in json.load\\(sys.stdin\\)]\")",
       "WebFetch(domain:api.github.com)",
-      "Bash(awk '/^description:/,/^[a-z]+:/' skills/nth-supper/SKILL.md)",
-      "Bash(python *)"
+      "Bash(awk '/^description:/,/^[a-z]+:/' skills/supper/SKILL.md)",
+      "Bash(python *)",
+      "Bash(git mv *)"
     ]
   }
 }
